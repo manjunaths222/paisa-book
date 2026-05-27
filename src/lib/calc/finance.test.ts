@@ -108,6 +108,30 @@ describe('finance calculations', () => {
     expect(renewed.netWorthByHorizon['12M']).toBeGreaterThan(bounded.netWorthByHorizon['12M']);
   });
 
+  it('applies FD auto-renew projection even when payout frequency is periodic', () => {
+    const termEndDate = format(addMonths(new Date(), 1), 'yyyy-MM-dd');
+    const instruments: Instrument[] = [
+      {
+        id: 'fd-4',
+        uid: 'u1',
+        memberId: 'm1',
+        type: 'fd',
+        referenceId: 'FD-4',
+        status: 'active',
+        bankName: 'Bank',
+        startDate: '2024-01-01',
+        termEndDate,
+        interestRate: 12,
+        principalAmount: 100000,
+        payoutFrequency: 'Monthly',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      }
+    ];
+    const renewed = projectPortfolio(instruments, undefined, { autoRenewDeposits: true });
+    expect(renewed.netWorthByHorizon['12M']).toBeGreaterThan(100000);
+  });
+
   it('changes RD projection when auto-renew is enabled beyond the first term', () => {
     const instruments: Instrument[] = [
       {

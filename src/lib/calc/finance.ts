@@ -50,17 +50,32 @@ const safeParseDate = (value?: string) => {
 };
 
 const monthsBetween = (start: Date, end: Date) => Math.max(0, differenceInCalendarDays(end, start) / 30.4375);
+const finiteNumber = (value: unknown) => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const fdMaturityDate = (instrument: Extract<Instrument, { type: 'fd' }>) => {
   const start = safeParseDate(instrument.startDate);
   if (!start) return undefined;
   const explicitEnd = safeParseDate(instrument.termEndDate);
   if (explicitEnd) return explicitEnd;
-  const years = instrument.periodYears ?? 0;
-  const months = instrument.periodMonths ?? 0;
-  const days = instrument.periodDays ?? 0;
+  const years = finiteNumber(instrument.periodYears);
+  const months = finiteNumber(instrument.periodMonths);
+  const days = finiteNumber(instrument.periodDays);
   if (years <= 0 && months <= 0 && days <= 0) return undefined;
   return addDays(addMonths(addYears(start, years), months), days);
+};
+
+const projectFDValue = (
+  instrument: Extract<Instrument, { type: 'fd' }>,
+  monthsAhead: number,
+  autoRenewDeposits = true
+) => {
+  const maturity = fdMaturityDate(instrument);
+  const monthsUntilMaturity = maturity ? monthsBetween(new Date(), maturity) : monthsAhead;
+  const monthsToProject = autoRenewDeposits ? monthsAhead : Math.min(monthsAhead, monthsUntilMaturity);
+  return compound(instrument.principalAmount, instrument.interestRate, monthsToProject, 4);
 };
 
 export const calcRDMaturity = (monthlyInstalment: number, annualRate: number, months: number) => {
@@ -133,15 +148,7 @@ export const projectInstrument = (
   const years = monthsAhead / 12;
   switch (instrument.type) {
     case 'fd': {
-      const maturity = fdMaturityDate(instrument);
-      const monthsUntilMaturity = maturity ? monthsBetween(new Date(), maturity) : monthsAhead;
-      const monthsToProject = options.autoRenewDeposits === false ? Math.min(monthsAhead, monthsUntilMaturity) : monthsAhead;
-      return calcFDMaturity(
-        instrument.principalAmount,
-        instrument.interestRate,
-        monthsToProject,
-        instrument.payoutFrequency
-      );
+      return projectFDValue(instrument, monthsAhead, options.autoRenewDeposits !== false);
     }
     case 'rd': {
       const elapsed = Math.max(0, differenceInMonths(new Date(), parseISO(instrument.startDate)));

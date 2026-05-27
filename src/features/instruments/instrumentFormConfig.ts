@@ -125,36 +125,36 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
   ]
 };
 
-export const defaultsForType = (type: InstrumentType, selfMemberId: string): Record<string, any> => ({
-  type,
-  memberId: selfMemberId,
-  status: 'active',
-  referenceId: '',
-  description: '',
-  startDate: new Date().toISOString().slice(0, 10),
-  purchaseDate: new Date().toISOString().slice(0, 10),
-  investmentDate: new Date().toISOString().slice(0, 10),
-  loanStartDate: new Date().toISOString().slice(0, 10),
-  policyStartDate: new Date().toISOString().slice(0, 10),
-  accountOpenDate: new Date().toISOString().slice(0, 10),
-  premiumDueDate: addMonths(new Date(), 1).toISOString().slice(0, 10),
-  payoutFrequency: 'At Maturity',
-  exchange: 'NSE',
-  loanType: 'Home',
-  premiumFrequency: 'Yearly',
-  category: 'Savings Account',
-  numberOfMonths: 12,
-  emiDate: 5,
-  instalmentDay: 5,
-  currentInstalmentCount: 1,
-  interestRate: type === 'loan' ? 8.5 : 7,
-  estimatedRoi: type === 'ssa' ? 8.2 : 7.1,
-  policyTermYears: 20,
-  tenureMonths: 120,
-  periodYears: 1,
-  periodMonths: 0,
-  periodDays: 0
-});
+export const defaultsForType = (type: InstrumentType, selfMemberId: string): Record<string, any> => {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    type,
+    memberId: selfMemberId,
+    status: 'active',
+    referenceId: '',
+    description: '',
+    startDate: today,
+    purchaseDate: today,
+    investmentDate: today,
+    loanStartDate: today,
+    policyStartDate: today,
+    accountOpenDate: today,
+    premiumDueDate: addMonths(new Date(), 1).toISOString().slice(0, 10),
+    payoutFrequency: 'At Maturity',
+    exchange: 'NSE',
+    loanType: 'Home',
+    premiumFrequency: 'Yearly',
+    category: 'Savings Account',
+    numberOfMonths: 12,
+    emiDate: 5,
+    instalmentDay: 5,
+    currentInstalmentCount: 1,
+    interestRate: type === 'loan' ? 8.5 : 7,
+    estimatedRoi: type === 'ssa' ? 8.2 : 7.1,
+    policyTermYears: 20,
+    tenureMonths: 120
+  };
+};
 
 export const instrumentName = (instrument: Instrument) => {
   switch (instrument.type) {

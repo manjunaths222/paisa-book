@@ -49,8 +49,9 @@ export function InstrumentFormPage() {
   const chips = computedChips(draft, user?.currency ?? 'INR');
   const fdPeriodFields = ['periodYears', 'periodMonths', 'periodDays'];
   const hasFdTermEnd = type === 'fd' && Boolean(draft.termEndDate);
-  const hasFdPeriod =
-    type === 'fd' && fdPeriodFields.some((fieldName) => Number(draft[fieldName] ?? 0) > 0);
+  const disabledFdDurationFields = new Set(
+    type === 'fd' && hasFdTermEnd ? fdPeriodFields : []
+  );
 
   if (isEdit && instruments.length > 0 && !existing) return <Navigate to="/instruments" replace />;
 
@@ -189,8 +190,7 @@ export function InstrumentFormPage() {
                       max={config.type === 'date' && config.historical ? new Date().toISOString().slice(0, 10) : undefined}
                       disabled={
                         type === 'fd' &&
-                        ((config.name === 'termEndDate' && hasFdPeriod) ||
-                          (fdPeriodFields.includes(config.name) && hasFdTermEnd))
+                        disabledFdDurationFields.has(config.name)
                       }
                       className={inputClass}
                       onChange={(event) => {
