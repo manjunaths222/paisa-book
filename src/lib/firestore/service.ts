@@ -23,6 +23,15 @@ const assertDb = () => {
   if (!db) throw new Error('Firebase is not configured');
   return db;
 };
+const stripUndefined = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map((item) => stripUndefined(item)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).filter(([, item]) => item !== undefined).map(([key, item]) => [key, stripUndefined(item)])
+    ) as T;
+  }
+  return value;
+};
 const serializeDoc = <T>(id: string, data: any): T => {
   const normalized = Object.fromEntries(
     Object.entries(data).map(([key, value]) => [
@@ -32,29 +41,49 @@ const serializeDoc = <T>(id: string, data: any): T => {
   );
   return { id, ...normalized } as T;
 };
+const userDefaults = (user: AppUser): AppUser => ({
+  ...user,
+  autoRenewDeposits: user.autoRenewDeposits ?? true
+});
 
 export const firestoreService = {
   async getUser(uid: string) {
     if (!isFirebaseConfigured) return localStore.getUser(uid);
     const snap = await getDoc(doc(assertDb(), 'users', uid));
-    return snap.exists() ? serializeDoc<AppUser>(uid, snap.data()) : null;
+    return snap.exists() ? userDefaults(serializeDoc<AppUser>(uid, snap.data())) : null;
   },
   async upsertUser(user: AppUser) {
     if (!isFirebaseConfigured) return localStore.upsertUser(user);
+    const userRef = doc(assertDb(), 'users', user.uid);
+    const existingSnap = await getDoc(userRef);
+    const existing = existingSnap.exists() ? (existingSnap.data() as Partial<AppUser>) : {};
+    const next = stripUndefined({
+      ...existing,
+      ...user,
+      currency: existing.currency ?? user.currency ?? 'INR',
+      autoRenewDeposits: existing.autoRenewDeposits ?? user.autoRenewDeposits ?? true,
+      onboardingComplete: existing.onboardingComplete ?? user.onboardingComplete ?? false,
+      createdAt: existing.createdAt ?? user.createdAt,
+      lastLoginAt: now()
+    });
     await setDoc(
-      doc(assertDb(), 'users', user.uid),
-      {
-        ...user,
-        createdAt: user.createdAt,
-        lastLoginAt: now()
-      },
+      userRef,
+      next,
       { merge: true }
     );
-    return user;
+    return next as AppUser;
   },
   async completeOnboarding(uid: string) {
     if (!isFirebaseConfigured) return localStore.completeOnboarding(uid);
     await updateDoc(doc(assertDb(), 'users', uid), { onboardingComplete: true, updatedAt: serverTimestamp() });
+  },
+  async updateUser(uid: string, input: Partial<AppUser>) {
+    if (!isFirebaseConfigured) return localStore.updateUser(uid, input);
+    const userRef = doc(assertDb(), 'users', uid);
+    await updateDoc(userRef, stripUndefined({ ...input, updatedAt: serverTimestamp() }));
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) throw new Error('User profile not found');
+    return userDefaults(serializeDoc<AppUser>(uid, snap.data()));
   },
   subscribeMembers(uid: string, callback: (members: FamilyMember[]) => void) {
     if (!isFirebaseConfigured) return localStore.subscribeMembers(uid, callback);
@@ -76,7 +105,7 @@ export const firestoreService = {
       createdAt: now(),
       updatedAt: now()
     };
-    await setDoc(selfMemberRef, payload, { merge: true });
+    await setDoc(selfMemberRef, stripUndefined(payload), { merge: true });
     return { id: selfMemberId, ...payload };
   },
   async addMember(uid: string, input: Omit<FamilyMember, 'id' | 'uid' | 'createdAt' | 'updatedAt' | 'isSelf'>) {
@@ -84,12 +113,12 @@ export const firestoreService = {
     const members = await getDocs(query(collection(assertDb(), 'members'), where('uid', '==', uid)));
     if (members.size >= 20) throw new Error('You can add up to 20 family members');
     const payload = { ...input, uid, isSelf: false, createdAt: now(), updatedAt: now() };
-    const result = await addDoc(collection(assertDb(), 'members'), payload);
+    const result = await addDoc(collection(assertDb(), 'members'), stripUndefined(payload));
     return result.id;
   },
   async updateMember(uid: string, id: string, input: Partial<FamilyMember>) {
     if (!isFirebaseConfigured) return localStore.updateMember(uid, id, input);
-    await updateDoc(doc(assertDb(), 'members', id), { ...input, uid, updatedAt: now() });
+    await updateDoc(doc(assertDb(), 'members', id), stripUndefined({ ...input, uid, updatedAt: now() }));
   },
   async deleteMember(uid: string, id: string) {
     if (!isFirebaseConfigured) return localStore.deleteMember(uid, id);
@@ -113,12 +142,12 @@ export const firestoreService = {
   async addInstrument(uid: string, input: InstrumentInput) {
     if (!isFirebaseConfigured) return localStore.addInstrument(uid, input);
     const payload = { ...input, uid, createdAt: now(), updatedAt: now() };
-    const result = await addDoc(collection(assertDb(), 'instruments'), payload);
+    const result = await addDoc(collection(assertDb(), 'instruments'), stripUndefined(payload));
     return result.id;
   },
   async updateInstrument(uid: string, id: string, input: Partial<Instrument>) {
     if (!isFirebaseConfigured) return localStore.updateInstrument(uid, id, input);
-    await updateDoc(doc(assertDb(), 'instruments', id), { ...input, uid, updatedAt: now(), projCache: null });
+    await updateDoc(doc(assertDb(), 'instruments', id), stripUndefined({ ...input, uid, updatedAt: now(), projCache: null }));
   },
   async deleteInstrument(uid: string, id: string) {
     if (!isFirebaseConfigured) return localStore.deleteInstrument(uid, id);

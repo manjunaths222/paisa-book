@@ -14,6 +14,7 @@ interface AuthContextValue {
   signInDemo: () => Promise<void>;
   signOutUser: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  updateUserSettings: (updates: Partial<Pick<AppUser, 'currency' | 'autoRenewDeposits'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -25,6 +26,7 @@ const fromFirebaseUser = (firebaseUser: FirebaseUser): AppUser => ({
   displayName: firebaseUser.displayName ?? 'Family Admin',
   photoURL: firebaseUser.photoURL ?? undefined,
   currency: 'INR',
+  autoRenewDeposits: true,
   onboardingComplete: false,
   createdAt: new Date().toISOString(),
   lastLoginAt: new Date().toISOString()
@@ -39,6 +41,7 @@ const authErrorMessage = (error: unknown) => {
   }
   return error instanceof Error ? error.message : 'Unable to sign in';
 };
+const onboardingDismissedKey = (uid: string) => `paisa-book:${uid}:onboarding-dismissed`;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -102,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: 'demo@paisa-book.local',
       displayName: 'Demo Family Admin',
       currency: 'INR',
+      autoRenewDeposits: true,
       onboardingComplete: false,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString()
@@ -123,11 +127,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const completeOnboarding = async () => {
     if (!user) return;
-    await firestoreService.completeOnboarding(user.uid);
+    localStorage.setItem(onboardingDismissedKey(user.uid), 'true');
     setUser({ ...user, onboardingComplete: true });
+    try {
+      await firestoreService.completeOnboarding(user.uid);
+    } catch (error) {
+      pushToast({
+        type: 'warning',
+        message: error instanceof Error ? error.message : 'Onboarding dismissed locally, but sync failed'
+      });
+    }
   };
 
-  const value = { user, loading, signIn, signInDemo, signOutUser, completeOnboarding };
+  const updateUserSettings = async (updates: Partial<Pick<AppUser, 'currency' | 'autoRenewDeposits'>>) => {
+    if (!user) return;
+    const next = { ...user, ...updates };
+    setUser(next);
+    try {
+      const saved = await firestoreService.updateUser(user.uid, updates);
+      setUser(saved);
+    } catch (error) {
+      setUser(user);
+      throw error;
+    }
+  };
+
+  const value = { user, loading, signIn, signInDemo, signOutUser, completeOnboarding, updateUserSettings };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

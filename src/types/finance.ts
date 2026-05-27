@@ -30,6 +30,7 @@ export interface AppUser {
   displayName: string;
   photoURL?: string;
   currency: CurrencyCode;
+  autoRenewDeposits: boolean;
   onboardingComplete: boolean;
   createdAt: string;
   lastLoginAt: string;

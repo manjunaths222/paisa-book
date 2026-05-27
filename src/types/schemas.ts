@@ -1,4 +1,4 @@
-import { differenceInYears, parseISO } from 'date-fns';
+import { differenceInYears, isAfter, isValid, parseISO } from 'date-fns';
 import { z } from 'zod';
 import {
   exchanges,
@@ -10,29 +10,33 @@ import {
 } from './catalog';
 import { FamilyMember, InstrumentInput, InstrumentType } from './finance';
 
-const today = new Date();
 const requiredString = z.string().trim().min(1, 'Required');
-const optionalText = z.string().trim().max(500, 'Maximum 500 characters').optional().or(z.literal(''));
+const emptyToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+const optionalText = (max = 500) =>
+  z.preprocess(emptyToUndefined, z.string().trim().max(max, `Maximum ${max} characters`).optional());
+const optionalNumber = (schema: z.ZodNumber) => z.preprocess(emptyToUndefined, schema.optional());
 const referenceId = requiredString.regex(/^[a-zA-Z0-9-]+$/, 'Use letters, numbers, and hyphens');
 const money = z.coerce.number().positive('Must be greater than 0');
 const rate = z.coerce.number().min(0.01).max(25);
-const pastDate = requiredString.refine((value) => parseISO(value) <= today, 'Date cannot be in the future');
+const dateString = requiredString.refine((value) => isValid(parseISO(value)), 'Enter a valid date');
+const pastDate = dateString.refine((value) => !isAfter(parseISO(value), new Date()), 'Date cannot be in the future');
 const dayOfMonth = z.coerce.number().int().min(1).max(28);
 const status = z.enum(['active', 'closed', 'matured', 'archived']).default('active');
 const base = {
   memberId: requiredString,
   referenceId,
   status,
-  description: optionalText
+  description: optionalText()
 };
 
 export const memberSchema = z.object({
   name: requiredString.max(100),
   relationship: z.enum(relationships as [string, ...string[]]),
-  dob: z.string().optional().or(z.literal('')),
-  pan: z.string().max(10).optional().or(z.literal('')),
+  dob: optionalText(10),
+  pan: optionalText(10),
   color: requiredString,
-  notes: z.string().max(500).optional().or(z.literal('')),
+  notes: optionalText(),
   gender: z.enum(['female', 'male', 'other', 'unspecified']).default('unspecified')
 });
 
@@ -43,17 +47,25 @@ export const instrumentSchemas = {
       type: z.literal('fd'),
       bankName: requiredString.max(100),
       startDate: pastDate,
-      termEndDate: z.string().optional().or(z.literal('')),
-      periodYears: z.coerce.number().int().min(0).max(100).optional(),
-      periodMonths: z.coerce.number().int().min(0).max(1200).optional(),
-      periodDays: z.coerce.number().int().min(0).max(36600).optional(),
+      termEndDate: z.preprocess(emptyToUndefined, dateString.optional()),
+      periodYears: optionalNumber(z.coerce.number().int().min(0).max(100)),
+      periodMonths: optionalNumber(z.coerce.number().int().min(0).max(1200)),
+      periodDays: optionalNumber(z.coerce.number().int().min(0).max(36600)),
       interestRate: rate,
       principalAmount: money,
       payoutFrequency: z.enum(payoutFrequencies as [string, ...string[]])
     })
-    .refine((value) => value.termEndDate || value.periodYears || value.periodMonths || value.periodDays, {
+    .refine((value) => {
+      const hasTermEnd = Boolean(value.termEndDate);
+      const hasPeriod = [value.periodYears, value.periodMonths, value.periodDays].some((item) => Number(item ?? 0) > 0);
+      return hasTermEnd !== hasPeriod;
+    }, {
       path: ['termEndDate'],
-      message: 'Set an end date or a time period'
+      message: 'Set either a term end date or a positive time period'
+    })
+    .refine((value) => !value.termEndDate || isAfter(parseISO(value.termEndDate), parseISO(value.startDate)), {
+      path: ['termEndDate'],
+      message: 'Term end date must be after start date'
     }),
   rd: z.object({
     ...base,
@@ -75,30 +87,30 @@ export const instrumentSchemas = {
     quantity: z.coerce.number().positive(),
     averageBuyPrice: money,
     currentPrice: money,
-    estimatedXirr: z.coerce.number().min(-100).max(200).optional().or(z.literal('') as any)
+    estimatedXirr: optionalNumber(z.coerce.number().min(-100).max(200))
   }),
   mfLumpsum: z.object({
     ...base,
     type: z.literal('mfLumpsum'),
     fundName: requiredString.max(200),
-    amfiCode: z.string().regex(/^\d*$/, 'Numeric only').optional().or(z.literal('')),
+    amfiCode: z.preprocess(emptyToUndefined, z.string().regex(/^\d+$/, 'Numeric only').optional()),
     investmentDate: pastDate,
     unitsPurchased: z.coerce.number().positive(),
     navAtPurchase: money,
     currentNav: money,
-    estimatedXirr: z.coerce.number().min(-100).max(200).optional().or(z.literal('') as any)
+    estimatedXirr: optionalNumber(z.coerce.number().min(-100).max(200))
   }),
   mfSip: z.object({
     ...base,
     type: z.literal('mfSip'),
     fundName: requiredString.max(200),
-    amfiCode: z.string().regex(/^\d*$/, 'Numeric only').optional().or(z.literal('')),
+    amfiCode: z.preprocess(emptyToUndefined, z.string().regex(/^\d+$/, 'Numeric only').optional()),
     startDate: pastDate,
     monthlyInstalment: money,
     instalmentDay: dayOfMonth,
     currentInstalmentCount: z.coerce.number().int().min(1),
     currentAccumulatedValue: money,
-    estimatedXirr: z.coerce.number().min(-100).max(200).optional().or(z.literal('') as any)
+    estimatedXirr: optionalNumber(z.coerce.number().min(-100).max(200))
   }),
   loan: z
     .object({
@@ -129,7 +141,7 @@ export const instrumentSchemas = {
     premiumDueDate: requiredString,
     policyStartDate: pastDate,
     policyTermYears: z.coerce.number().int().min(5).max(40),
-    nominee: z.string().max(200).optional().or(z.literal(''))
+    nominee: optionalText(200)
   }),
   ppf: z.object({
     ...base,
@@ -155,7 +167,7 @@ export const instrumentSchemas = {
     name: requiredString.max(200),
     category: z.enum(savingsCategories as [string, ...string[]]),
     currentAmount: money,
-    roiRate: z.coerce.number().min(0).max(50).optional().or(z.literal('') as any)
+    roiRate: optionalNumber(z.coerce.number().min(0).max(50))
   })
 };
 

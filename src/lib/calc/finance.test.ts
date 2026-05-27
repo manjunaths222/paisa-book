@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { calcEMI, calcFDMaturity, calcRDMaturity, projectPortfolio } from './finance';
+import { addMonths, format } from 'date-fns';
+import { calcEMI, calcFDMaturity, calcRDMaturity, maturityDateForInstrument, projectPortfolio } from './finance';
 import { Instrument } from '../../types/finance';
 
 describe('finance calculations', () => {
@@ -39,5 +40,95 @@ describe('finance calculations', () => {
     ];
     expect(projectPortfolio(instruments).currentNetWorth).toBe(-900000);
     expect(projectPortfolio(instruments).netWorthByHorizon['12M']).toBeLessThan(0);
+  });
+
+  it('includes days when calculating FD maturity date', () => {
+    const maturity = maturityDateForInstrument({
+      id: 'fd-1',
+      uid: 'u1',
+      memberId: 'm1',
+      type: 'fd',
+      referenceId: 'FD-1',
+      status: 'active',
+      bankName: 'Bank',
+      startDate: '2024-01-01',
+      periodYears: 1,
+      periodMonths: 2,
+      periodDays: 10,
+      interestRate: 7,
+      principalAmount: 100000,
+      payoutFrequency: 'At Maturity',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01'
+    });
+    expect(maturity).toBe('2025-03-11');
+  });
+
+  it('returns no FD maturity date for incomplete duration fields', () => {
+    const maturity = maturityDateForInstrument({
+      id: 'fd-2',
+      uid: 'u1',
+      memberId: 'm1',
+      type: 'fd',
+      referenceId: 'FD-2',
+      status: 'active',
+      bankName: 'Bank',
+      startDate: '2024-01-01',
+      interestRate: 7,
+      principalAmount: 100000,
+      payoutFrequency: 'At Maturity',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01'
+    });
+    expect(maturity).toBeUndefined();
+  });
+
+  it('changes FD projection when auto-renew is disabled after maturity', () => {
+    const termEndDate = format(addMonths(new Date(), 1), 'yyyy-MM-dd');
+    const instruments: Instrument[] = [
+      {
+        id: 'fd-3',
+        uid: 'u1',
+        memberId: 'm1',
+        type: 'fd',
+        referenceId: 'FD-3',
+        status: 'active',
+        bankName: 'Bank',
+        startDate: '2024-01-01',
+        termEndDate,
+        interestRate: 12,
+        principalAmount: 100000,
+        payoutFrequency: 'At Maturity',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      }
+    ];
+    const renewed = projectPortfolio(instruments, undefined, { autoRenewDeposits: true });
+    const bounded = projectPortfolio(instruments, undefined, { autoRenewDeposits: false });
+    expect(renewed.netWorthByHorizon['12M']).toBeGreaterThan(bounded.netWorthByHorizon['12M']);
+  });
+
+  it('changes RD projection when auto-renew is enabled beyond the first term', () => {
+    const instruments: Instrument[] = [
+      {
+        id: 'rd-1',
+        uid: 'u1',
+        memberId: 'm1',
+        type: 'rd',
+        referenceId: 'RD-1',
+        status: 'active',
+        bankName: 'Bank',
+        startDate: format(new Date(), 'yyyy-MM-dd'),
+        numberOfMonths: 3,
+        emiDate: 5,
+        interestRate: 8,
+        monthlyInstalment: 10000,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01'
+      }
+    ];
+    const renewed = projectPortfolio(instruments, undefined, { autoRenewDeposits: true });
+    const bounded = projectPortfolio(instruments, undefined, { autoRenewDeposits: false });
+    expect(renewed.netWorthByHorizon['12M']).toBeGreaterThan(bounded.netWorthByHorizon['12M']);
   });
 });

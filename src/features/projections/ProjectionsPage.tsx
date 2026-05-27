@@ -26,7 +26,11 @@ export function ProjectionsPage() {
   const { members } = useMembers();
   const [types, setTypes] = useState<InstrumentType[]>([]);
   const [memberIds, setMemberIds] = useState<string[]>([]);
-  const result = useMemo(() => projectPortfolio(instruments, { types, memberIds }), [instruments, memberIds, types]);
+  const autoRenewDeposits = user?.autoRenewDeposits ?? true;
+  const result = useMemo(
+    () => projectPortfolio(instruments, { types, memberIds }, { autoRenewDeposits }),
+    [autoRenewDeposits, instruments, memberIds, types]
+  );
   const chartData = result.horizons.map((horizon) => ({
     horizon,
     netWorth: result.netWorthByHorizon[horizon],
@@ -43,6 +47,11 @@ export function ProjectionsPage() {
         <Card className="space-y-4 p-4">
           <FilterPills values={instrumentTypes} selected={types} onChange={setTypes} labelFor={(value) => instrumentLabels[value]} />
           <FilterPills values={members.map((member) => member.id)} selected={memberIds} onChange={setMemberIds} labelFor={(value) => members.find((member) => member.id === value)?.name ?? value} />
+          {autoRenewDeposits ? (
+            <p className="text-sm font-medium text-teal-700">
+              FD and RD projections assume auto-renewal. You can change this in Settings.
+            </p>
+          ) : null}
         </Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           {result.horizons.map((horizon) => {

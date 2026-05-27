@@ -47,6 +47,10 @@ export function InstrumentFormPage() {
 
   const memberOptions = useMemo(() => membersForSelect(members), [members]);
   const chips = computedChips(draft, user?.currency ?? 'INR');
+  const fdPeriodFields = ['periodYears', 'periodMonths', 'periodDays'];
+  const hasFdTermEnd = type === 'fd' && Boolean(draft.termEndDate);
+  const hasFdPeriod =
+    type === 'fd' && fdPeriodFields.some((fieldName) => Number(draft[fieldName] ?? 0) > 0);
 
   if (isEdit && instruments.length > 0 && !existing) return <Navigate to="/instruments" replace />;
 
@@ -134,7 +138,7 @@ export function InstrumentFormPage() {
             control={control}
             render={({ field }) => (
               <Field label="Member" required error={errors.memberId}>
-                <select {...field} className={inputClass}>
+                <select {...field} value={field.value ?? ''} className={inputClass}>
                   {memberOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -149,7 +153,7 @@ export function InstrumentFormPage() {
             control={control}
             render={({ field }) => (
               <Field label="Status" required error={errors.status}>
-                <select {...field} className={inputClass}>
+                <select {...field} value={field.value ?? ''} className={inputClass}>
                   {['active', 'closed', 'matured'].map((status) => (
                     <option key={status} value={status}>
                       {status}
@@ -167,7 +171,7 @@ export function InstrumentFormPage() {
               render={({ field }) => (
                 <Field label={config.label} required={config.required} error={errors[config.name]}>
                   {config.type === 'select' ? (
-                    <select {...field} className={inputClass}>
+                    <select {...field} value={field.value ?? ''} className={inputClass}>
                       {config.options?.map((option) => (
                         <option key={option} value={option}>
                           {option}
@@ -175,13 +179,19 @@ export function InstrumentFormPage() {
                       ))}
                     </select>
                   ) : config.type === 'textarea' ? (
-                    <textarea {...field} className={`${inputClass} min-h-28 py-3`} />
+                    <textarea {...field} value={field.value ?? ''} className={`${inputClass} min-h-28 py-3`} />
                   ) : (
                     <input
                       {...field}
+                      value={field.value ?? ''}
                       type={config.type ?? 'text'}
                       step={config.step}
-                      max={config.type === 'date' ? new Date().toISOString().slice(0, 10) : undefined}
+                      max={config.type === 'date' && config.historical ? new Date().toISOString().slice(0, 10) : undefined}
+                      disabled={
+                        type === 'fd' &&
+                        ((config.name === 'termEndDate' && hasFdPeriod) ||
+                          (fdPeriodFields.includes(config.name) && hasFdTermEnd))
+                      }
                       className={inputClass}
                       onChange={(event) => {
                         field.onChange(event);
@@ -189,6 +199,9 @@ export function InstrumentFormPage() {
                           setValue('periodYears', undefined);
                           setValue('periodMonths', undefined);
                           setValue('periodDays', undefined);
+                        }
+                        if (type === 'fd' && fdPeriodFields.includes(config.name) && Number(event.target.value) > 0) {
+                          setValue('termEndDate', undefined);
                         }
                       }}
                     />
@@ -203,7 +216,7 @@ export function InstrumentFormPage() {
             render={({ field }) => (
               <div className="md:col-span-2">
                 <Field label="Description" error={errors.description}>
-                  <textarea {...field} className={`${inputClass} min-h-28 py-3`} maxLength={500} />
+                  <textarea {...field} value={field.value ?? ''} className={`${inputClass} min-h-28 py-3`} maxLength={500} />
                 </Field>
               </div>
             )}

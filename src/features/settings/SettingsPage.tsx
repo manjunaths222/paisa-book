@@ -2,7 +2,6 @@ import { LogOut } from 'lucide-react';
 import { Button, Card, PageHeader } from '../../shared/components/ui';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useMembers } from '../../shared/hooks/useFamilyData';
-import { firestoreService } from '../../lib/firestore/service';
 import { CurrencyCode } from '../../types/finance';
 import { useUiStore } from '../../shared/stores/uiStore';
 import { Link } from 'react-router-dom';
@@ -10,14 +9,26 @@ import { Link } from 'react-router-dom';
 const currencies: CurrencyCode[] = ['INR', 'USD', 'EUR', 'GBP', 'SGD'];
 
 export function SettingsPage() {
-  const { user, signOutUser } = useAuth();
+  const { user, signOutUser, updateUserSettings } = useAuth();
   const { members } = useMembers();
   const pushToast = useUiStore((state) => state.pushToast);
   const updateCurrency = async (currency: CurrencyCode) => {
     if (!user) return;
-    await firestoreService.upsertUser({ ...user, currency });
-    pushToast({ type: 'success', message: 'Currency display updated' });
-    window.location.reload();
+    try {
+      await updateUserSettings({ currency });
+      pushToast({ type: 'success', message: 'Currency display updated' });
+    } catch (error) {
+      pushToast({ type: 'error', message: error instanceof Error ? error.message : 'Unable to update currency' });
+    }
+  };
+  const updateAutoRenew = async (autoRenewDeposits: boolean) => {
+    if (!user) return;
+    try {
+      await updateUserSettings({ autoRenewDeposits });
+      pushToast({ type: 'success', message: 'Projection preference updated' });
+    } catch (error) {
+      pushToast({ type: 'error', message: error instanceof Error ? error.message : 'Unable to update projections' });
+    }
   };
 
   return (
@@ -36,6 +47,21 @@ export function SettingsPage() {
               <option key={currency}>{currency}</option>
             ))}
           </select>
+        </Card>
+        <Card className="p-5">
+          <h2 className="font-bold text-slate-950">Projection Defaults</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Apply a conservative auto-renew assumption to FD and RD projection horizons.
+          </p>
+          <label className="mt-4 flex items-center justify-between gap-4 rounded-md border border-slate-200 px-3 py-3">
+            <span className="text-sm font-semibold text-slate-800">Assume FD/RD auto-renewal in projections</span>
+            <input
+              type="checkbox"
+              className="h-5 w-5 rounded border-slate-300 text-teal-700"
+              checked={user?.autoRenewDeposits ?? true}
+              onChange={(event) => void updateAutoRenew(event.target.checked)}
+            />
+          </label>
         </Card>
         <Card className="p-5">
           <h2 className="font-bold text-slate-950">Family Members</h2>

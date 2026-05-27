@@ -6,7 +6,8 @@ import { useAuth } from '../../shared/hooks/useAuth';
 export function OnboardingModal() {
   const { user, completeOnboarding } = useAuth();
   const [step, setStep] = useState(0);
-  if (!user || user.onboardingComplete) return null;
+  const dismissed = user ? localStorage.getItem(`paisa-book:${user.uid}:onboarding-dismissed`) === 'true' : false;
+  if (!user || user.onboardingComplete || dismissed) return null;
   const steps = [
     {
       title: 'Welcome to Paisa Book',

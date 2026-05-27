@@ -19,13 +19,14 @@ export interface FieldConfig {
   required?: boolean;
   options?: string[];
   step?: string;
+  historical?: boolean;
 }
 
 export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
   fd: [
     { name: 'referenceId', label: 'Deposit ID', required: true },
     { name: 'bankName', label: 'Bank / Institution', required: true },
-    { name: 'startDate', label: 'Start Date', type: 'date', required: true },
+    { name: 'startDate', label: 'Start Date', type: 'date', required: true, historical: true },
     { name: 'termEndDate', label: 'Term End Date', type: 'date' },
     { name: 'periodYears', label: 'Period Years', type: 'number' },
     { name: 'periodMonths', label: 'Period Months', type: 'number' },
@@ -37,7 +38,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
   rd: [
     { name: 'referenceId', label: 'Deposit ID', required: true },
     { name: 'bankName', label: 'Bank / Institution', required: true },
-    { name: 'startDate', label: 'Start Date', type: 'date', required: true },
+    { name: 'startDate', label: 'Start Date', type: 'date', required: true, historical: true },
     { name: 'numberOfMonths', label: 'Number of Months', type: 'number', required: true },
     { name: 'emiDate', label: 'EMI Date', type: 'number', required: true },
     { name: 'interestRate', label: 'Interest Rate %', type: 'number', step: '0.01', required: true },
@@ -48,7 +49,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
     { name: 'companyName', label: 'Company Name', required: true },
     { name: 'tickerSymbol', label: 'Ticker Symbol', required: true },
     { name: 'exchange', label: 'Exchange', type: 'select', options: exchanges, required: true },
-    { name: 'purchaseDate', label: 'Purchase Date', type: 'date', required: true },
+    { name: 'purchaseDate', label: 'Purchase Date', type: 'date', required: true, historical: true },
     { name: 'quantity', label: 'Quantity', type: 'number', step: '0.001', required: true },
     { name: 'averageBuyPrice', label: 'Average Buy Price', type: 'number', required: true },
     { name: 'currentPrice', label: 'Current Price', type: 'number', required: true },
@@ -58,7 +59,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
     { name: 'referenceId', label: 'MF ID', required: true },
     { name: 'fundName', label: 'Fund Name', required: true },
     { name: 'amfiCode', label: 'AMFI Code' },
-    { name: 'investmentDate', label: 'Investment Date', type: 'date', required: true },
+    { name: 'investmentDate', label: 'Investment Date', type: 'date', required: true, historical: true },
     { name: 'unitsPurchased', label: 'Units Purchased', type: 'number', step: '0.001', required: true },
     { name: 'navAtPurchase', label: 'NAV at Purchase', type: 'number', required: true },
     { name: 'currentNav', label: 'Current NAV', type: 'number', required: true },
@@ -68,7 +69,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
     { name: 'referenceId', label: 'MF ID', required: true },
     { name: 'fundName', label: 'Fund Name', required: true },
     { name: 'amfiCode', label: 'AMFI Code' },
-    { name: 'startDate', label: 'Start Date', type: 'date', required: true },
+    { name: 'startDate', label: 'Start Date', type: 'date', required: true, historical: true },
     { name: 'monthlyInstalment', label: 'Monthly Instalment', type: 'number', required: true },
     { name: 'instalmentDay', label: 'Instalment Day', type: 'number', required: true },
     { name: 'currentInstalmentCount', label: 'Current Instalment Count', type: 'number', required: true },
@@ -80,7 +81,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
     { name: 'loanName', label: 'Loan Name / Lender', required: true },
     { name: 'loanType', label: 'Loan Type', type: 'select', options: loanTypes, required: true },
     { name: 'sanctionedAmount', label: 'Sanctioned Amount', type: 'number', required: true },
-    { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true },
+    { name: 'loanStartDate', label: 'Loan Start Date', type: 'date', required: true, historical: true },
     { name: 'tenureMonths', label: 'Tenure Months', type: 'number', required: true },
     { name: 'monthlyEmi', label: 'Monthly EMI', type: 'number', required: true },
     { name: 'emiDate', label: 'EMI Date', type: 'number', required: true },
@@ -95,14 +96,14 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
     { name: 'annualPremium', label: 'Annual Premium', type: 'number', required: true },
     { name: 'premiumFrequency', label: 'Premium Frequency', type: 'select', options: premiumFrequencies, required: true },
     { name: 'premiumDueDate', label: 'Premium Due Date', type: 'date', required: true },
-    { name: 'policyStartDate', label: 'Policy Start Date', type: 'date', required: true },
+    { name: 'policyStartDate', label: 'Policy Start Date', type: 'date', required: true, historical: true },
     { name: 'policyTermYears', label: 'Policy Term Years', type: 'number', required: true },
     { name: 'nominee', label: 'Nominee' }
   ],
   ppf: [
     { name: 'referenceId', label: 'Account ID', required: true },
     { name: 'institutionName', label: 'Bank / Post Office', required: true },
-    { name: 'accountOpenDate', label: 'Account Open Date', type: 'date', required: true },
+    { name: 'accountOpenDate', label: 'Account Open Date', type: 'date', required: true, historical: true },
     { name: 'currentBalance', label: 'Current Balance', type: 'number', required: true },
     { name: 'financialYearContribution', label: 'FY Contribution', type: 'number', required: true },
     { name: 'estimatedRoi', label: 'Estimated ROI %', type: 'number', step: '0.01', required: true }
@@ -110,7 +111,7 @@ export const fieldConfigs: Record<InstrumentType, FieldConfig[]> = {
   ssa: [
     { name: 'referenceId', label: 'Account ID', required: true },
     { name: 'institutionName', label: 'Bank / Post Office', required: true },
-    { name: 'accountOpenDate', label: 'Account Open Date', type: 'date', required: true },
+    { name: 'accountOpenDate', label: 'Account Open Date', type: 'date', required: true, historical: true },
     { name: 'currentBalance', label: 'Current Balance', type: 'number', required: true },
     { name: 'financialYearContribution', label: 'FY Contribution', type: 'number', required: true },
     { name: 'estimatedRoi', label: 'Estimated ROI %', type: 'number', step: '0.01', required: true }
@@ -211,8 +212,10 @@ export const membersForSelect = (members: FamilyMember[]) =>
   members.map((member) => ({ value: member.id, label: `${member.name} (${member.relationship})` }));
 
 export const normalizeFormValue = (value: any): InstrumentInput => {
-  const cleaned = Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, item === '' ? undefined : item])
-  );
+  const cleaned = Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
+    if (typeof item === 'string' && item.trim() === '') return [];
+    if (item === undefined) return [];
+    return [[key, item]];
+  }));
   return cleaned as InstrumentInput;
 };

@@ -17,17 +17,35 @@ const write = <T>(uid: string, name: string, value: T) => {
 export const localStore = {
   async upsertUser(user: AppUser) {
     const existing = localStorage.getItem(`paisa-book:user:${user.uid}`);
-    const next = existing ? { ...JSON.parse(existing), ...user, lastLoginAt: now() } : user;
+    const existingUser = existing ? (JSON.parse(existing) as Partial<AppUser>) : {};
+    const next = {
+      ...existingUser,
+      ...user,
+      currency: existingUser.currency ?? user.currency ?? 'INR',
+      autoRenewDeposits: existingUser.autoRenewDeposits ?? user.autoRenewDeposits ?? true,
+      onboardingComplete: existingUser.onboardingComplete ?? user.onboardingComplete ?? false,
+      createdAt: existingUser.createdAt ?? user.createdAt,
+      lastLoginAt: now()
+    };
     localStorage.setItem(`paisa-book:user:${user.uid}`, JSON.stringify(next));
     return next as AppUser;
   },
   async getUser(uid: string) {
     const value = localStorage.getItem(`paisa-book:user:${uid}`);
-    return value ? (JSON.parse(value) as AppUser) : null;
+    if (!value) return null;
+    const user = JSON.parse(value) as AppUser;
+    return { ...user, autoRenewDeposits: user.autoRenewDeposits ?? true };
   },
   async completeOnboarding(uid: string) {
     const user = await this.getUser(uid);
     if (user) await this.upsertUser({ ...user, onboardingComplete: true });
+  },
+  async updateUser(uid: string, input: Partial<AppUser>) {
+    const user = await this.getUser(uid);
+    if (!user) throw new Error('User profile not found');
+    const next = { ...user, ...input, lastLoginAt: now() };
+    localStorage.setItem(`paisa-book:user:${uid}`, JSON.stringify(next));
+    return next;
   },
   subscribeMembers(uid: string, callback: (members: FamilyMember[]) => void) {
     const emit = () => callback(read<FamilyMember[]>(uid, 'members', []));

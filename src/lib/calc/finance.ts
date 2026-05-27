@@ -1,4 +1,14 @@
-import { addMonths, differenceInMonths, differenceInYears, parseISO } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  addYears,
+  differenceInCalendarDays,
+  differenceInMonths,
+  differenceInYears,
+  format,
+  isValid,
+  parseISO
+} from 'date-fns';
 import {
   Instrument,
   InstrumentType,
@@ -31,6 +41,26 @@ export const calcFDMaturity = (
 ) => {
   if (payoutFrequency === 'At Maturity') return compound(principal, annualRate, months, 4);
   return principal;
+};
+
+const safeParseDate = (value?: string) => {
+  if (!value) return undefined;
+  const parsed = parseISO(value);
+  return isValid(parsed) ? parsed : undefined;
+};
+
+const monthsBetween = (start: Date, end: Date) => Math.max(0, differenceInCalendarDays(end, start) / 30.4375);
+
+const fdMaturityDate = (instrument: Extract<Instrument, { type: 'fd' }>) => {
+  const start = safeParseDate(instrument.startDate);
+  if (!start) return undefined;
+  const explicitEnd = safeParseDate(instrument.termEndDate);
+  if (explicitEnd) return explicitEnd;
+  const years = instrument.periodYears ?? 0;
+  const months = instrument.periodMonths ?? 0;
+  const days = instrument.periodDays ?? 0;
+  if (years <= 0 && months <= 0 && days <= 0) return undefined;
+  return addDays(addMonths(addYears(start, years), months), days);
 };
 
 export const calcRDMaturity = (monthlyInstalment: number, annualRate: number, months: number) => {
@@ -95,20 +125,43 @@ export const insuranceCoverage = (instruments: Instrument[]) =>
     0
   );
 
-export const projectInstrument = (instrument: Instrument, monthsAhead: number) => {
+export const projectInstrument = (
+  instrument: Instrument,
+  monthsAhead: number,
+  options: { autoRenewDeposits?: boolean } = {}
+) => {
   const years = monthsAhead / 12;
   switch (instrument.type) {
-    case 'fd':
+    case 'fd': {
+      const maturity = fdMaturityDate(instrument);
+      const monthsUntilMaturity = maturity ? monthsBetween(new Date(), maturity) : monthsAhead;
+      const monthsToProject = options.autoRenewDeposits === false ? Math.min(monthsAhead, monthsUntilMaturity) : monthsAhead;
       return calcFDMaturity(
         instrument.principalAmount,
         instrument.interestRate,
-        monthsAhead,
+        monthsToProject,
         instrument.payoutFrequency
       );
+    }
     case 'rd': {
       const elapsed = Math.max(0, differenceInMonths(new Date(), parseISO(instrument.startDate)));
-      const projectedMonths = Math.min(instrument.numberOfMonths, elapsed + monthsAhead);
-      return calcRDMaturity(instrument.monthlyInstalment, instrument.interestRate, projectedMonths);
+      const totalMonths = elapsed + monthsAhead;
+      if (options.autoRenewDeposits === false) {
+        return calcRDMaturity(
+          instrument.monthlyInstalment,
+          instrument.interestRate,
+          Math.min(instrument.numberOfMonths, totalMonths)
+        );
+      }
+      const completedCycles = Math.floor(totalMonths / instrument.numberOfMonths);
+      const remainderMonths = totalMonths % instrument.numberOfMonths;
+      return (
+        completedCycles *
+          calcRDMaturity(instrument.monthlyInstalment, instrument.interestRate, instrument.numberOfMonths) +
+        (remainderMonths > 0
+          ? calcRDMaturity(instrument.monthlyInstalment, instrument.interestRate, remainderMonths)
+          : 0)
+      );
     }
     case 'stock': {
       const rate = instrument.estimatedXirr ?? 10;
@@ -144,22 +197,24 @@ export const projectInstrument = (instrument: Instrument, monthsAhead: number) =
 
 export const maturityDateForInstrument = (instrument: Instrument) => {
   switch (instrument.type) {
-    case 'fd':
-      if (instrument.termEndDate) return instrument.termEndDate;
-      return addMonths(
-        parseISO(instrument.startDate),
-        (instrument.periodYears ?? 0) * 12 + (instrument.periodMonths ?? 0)
-      )
-        .toISOString()
-        .slice(0, 10);
+    case 'fd': {
+      const maturity = fdMaturityDate(instrument);
+      return maturity ? format(maturity, 'yyyy-MM-dd') : undefined;
+    }
     case 'rd':
-      return addMonths(parseISO(instrument.startDate), instrument.numberOfMonths).toISOString().slice(0, 10);
-    case 'termInsurance':
-      return addMonths(parseISO(instrument.policyStartDate), instrument.policyTermYears * 12)
-        .toISOString()
-        .slice(0, 10);
-    case 'ppf':
-      return addMonths(parseISO(instrument.accountOpenDate), 15 * 12).toISOString().slice(0, 10);
+      return safeParseDate(instrument.startDate)
+        ? format(addMonths(parseISO(instrument.startDate), instrument.numberOfMonths), 'yyyy-MM-dd')
+        : undefined;
+    case 'termInsurance': {
+      const start = safeParseDate(instrument.policyStartDate);
+      return start
+        ? format(addMonths(start, instrument.policyTermYears * 12), 'yyyy-MM-dd')
+        : undefined;
+    }
+    case 'ppf': {
+      const start = safeParseDate(instrument.accountOpenDate);
+      return start ? format(addMonths(start, 15 * 12), 'yyyy-MM-dd') : undefined;
+    }
     default:
       return undefined;
   }
@@ -169,7 +224,8 @@ export const yearsHeld = (date: string) => Math.max(0, differenceInYears(new Dat
 
 export const projectPortfolio = (
   instruments: Instrument[],
-  filters?: { types?: InstrumentType[]; memberIds?: string[] }
+  filters?: { types?: InstrumentType[]; memberIds?: string[] },
+  options: { autoRenewDeposits?: boolean } = {}
 ): ProjectionResult => {
   const active = instruments.filter((instrument) => {
     const typeOk = !filters?.types?.length || filters.types.includes(instrument.type);
@@ -183,7 +239,7 @@ export const projectPortfolio = (
       values: Object.fromEntries(
         horizons.map((horizon) => [
           horizon,
-          byType.reduce((sum, instrument) => sum + projectInstrument(instrument, horizonMonths[horizon]), 0)
+          byType.reduce((sum, instrument) => sum + projectInstrument(instrument, horizonMonths[horizon], options), 0)
         ])
       ) as Record<ProjectionHorizon, number>
     };
