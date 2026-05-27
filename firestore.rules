@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsIncomingUid() {
+      return signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    function ownsExistingUid() {
+      return signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, update: if signedIn() && uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /members/{memberId} {
+      allow get: if ownsExistingUid() || (signedIn() && memberId == request.auth.uid + "_self");
+      allow list: if ownsExistingUid();
+      allow create: if ownsIncomingUid();
+      allow update: if ownsExistingUid() && ownsIncomingUid();
+      allow delete: if ownsExistingUid() && resource.data.isSelf != true;
+    }
+
+    match /instruments/{instrumentId} {
+      allow read: if ownsExistingUid();
+      allow create: if ownsIncomingUid();
+      allow update: if ownsExistingUid() && ownsIncomingUid();
+      allow delete: if ownsExistingUid();
+    }
+
+    match /settings/{settingsId} {
+      allow read, create, update: if signedIn() && settingsId == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}
