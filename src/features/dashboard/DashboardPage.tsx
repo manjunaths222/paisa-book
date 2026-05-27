@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useMemo, useState } from 'react';
-import { format, isWithinInterval, setDate, addDays } from 'date-fns';
+import { addDays, format, isAfter, isWithinInterval, setDate } from 'date-fns';
 import { Button, Card, EmptyState, FilterPills, PageHeader, SkeletonCard } from '../../shared/components/ui';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useInstruments, useMembers } from '../../shared/hooks/useFamilyData';
-import { assetValueForType, currentInstrumentValue, insuranceCoverage } from '../../lib/calc/finance';
+import {
+  assetValueForType,
+  currentInstrumentValue,
+  insuranceCoverage,
+  maturityDateForInstrument
+} from '../../lib/calc/finance';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { instrumentLabels, instrumentTypes } from '../../types/catalog';
 import { Instrument } from '../../types/finance';
@@ -109,10 +114,13 @@ export function DashboardPage() {
             <Card className="p-5">
               <h2 className="mb-4 font-bold text-slate-950">Upcoming Obligations</h2>
               <div className="space-y-3">
-                {obligations.length === 0 ? <p className="text-sm text-slate-500">No EMI, premium, or RD instalment due in the next 30 days.</p> : obligations.map((item) => (
+                {obligations.length === 0 ? <p className="text-sm text-slate-500">No loan EMI, insurance premium, maturity, or SIP instalment due soon.</p> : obligations.map((item) => (
                   <div key={`${item.name}-${item.date}`} className="flex justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
-                    <span className="font-semibold text-slate-800">{item.name}</span>
-                    <span className="text-slate-500">{formatDate(item.date)}</span>
+                    <span>
+                      <span className="font-semibold text-slate-800">{item.name}</span>
+                      <span className="ml-2 text-xs font-semibold text-teal-700">{item.kind}</span>
+                    </span>
+                    <span className="shrink-0 text-slate-500">{formatDate(item.date)}</span>
                   </div>
                 ))}
               </div>
@@ -146,13 +154,33 @@ function Stat({ label, value, emphasis, danger }: { label: string; value: string
 
 function upcomingObligations(instruments: Instrument[]) {
   const start = new Date();
-  const end = addDays(start, 30);
+  const nextDateForDay = (day: number) => {
+    const thisMonth = setDate(start, day);
+    return isAfter(thisMonth, start) ? thisMonth : setDate(addDays(start, 32), day);
+  };
+  const within = (date: string, days: number) =>
+    isWithinInterval(new Date(date), { start, end: addDays(start, days) });
   return instruments
     .flatMap((instrument) => {
-      if (instrument.type === 'loan') return [{ name: `${instrument.loanName} EMI`, date: format(setDate(start, instrument.emiDate), 'yyyy-MM-dd') }];
-      if (instrument.type === 'rd') return [{ name: `${instrument.bankName} RD instalment`, date: format(setDate(start, instrument.emiDate), 'yyyy-MM-dd') }];
-      if (instrument.type === 'termInsurance') return [{ name: `${instrument.policyName} premium`, date: instrument.premiumDueDate }];
+      if (instrument.type === 'loan') {
+        return [{ name: instrument.loanName, kind: 'Loan EMI', date: format(nextDateForDay(instrument.emiDate), 'yyyy-MM-dd') }];
+      }
+      if (instrument.type === 'termInsurance') {
+        return [{ name: instrument.policyName, kind: 'Insurance premium', date: instrument.premiumDueDate }];
+      }
+      if (instrument.type === 'mfSip') {
+        return [{ name: instrument.fundName, kind: 'MF SIP instalment', date: format(nextDateForDay(instrument.instalmentDay), 'yyyy-MM-dd') }];
+      }
+      if (instrument.type === 'fd' || instrument.type === 'rd') {
+        const maturity = maturityDateForInstrument(instrument);
+        return maturity ? [{ name: instrumentName(instrument), kind: `${instrumentLabels[instrument.type]} maturity`, date: maturity }] : [];
+      }
       return [];
     })
-    .filter((item) => isWithinInterval(new Date(item.date), { start, end }));
+    .filter((item) => {
+      if (item.kind === 'Loan EMI' || item.kind === 'Insurance premium') return within(item.date, 90);
+      if (item.kind === 'MF SIP instalment') return within(item.date, 30);
+      return within(item.date, 60);
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }

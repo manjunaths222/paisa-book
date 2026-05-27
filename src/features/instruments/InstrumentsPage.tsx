@@ -9,6 +9,7 @@ import { Instrument, InstrumentType } from '../../types/finance';
 import { firestoreService } from '../../lib/firestore/service';
 import { useUiStore } from '../../shared/stores/uiStore';
 import { formatDate } from '../../lib/format';
+import { maturityDateForInstrument } from '../../lib/calc/finance';
 import { instrumentName, primaryAmount } from './instrumentFormConfig';
 
 export function InstrumentsPage() {
@@ -30,6 +31,13 @@ export function InstrumentsPage() {
           !search ||
           `${instrumentName(instrument)} ${instrument.referenceId}`.toLowerCase().includes(search.toLowerCase());
         return instrument.status !== 'archived' && typeOk && memberOk && searchOk;
+      }).sort((a, b) => {
+        const aMaturity = maturityDateForInstrument(a);
+        const bMaturity = maturityDateForInstrument(b);
+        if (aMaturity && bMaturity) return new Date(aMaturity).getTime() - new Date(bMaturity).getTime();
+        if (aMaturity) return -1;
+        if (bMaturity) return 1;
+        return b.updatedAt.localeCompare(a.updatedAt);
       }),
     [instruments, memberIds, search, types]
   );
@@ -87,6 +95,7 @@ export function InstrumentsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((instrument) => {
             const member = members.find((item) => item.id === instrument.memberId);
+            const maturity = maturityDateForInstrument(instrument);
             return (
               <Card key={instrument.id} className="p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -111,6 +120,7 @@ export function InstrumentsPage() {
                   </div>
                   <div className="text-right text-xs text-slate-500">
                     <p>{member?.name ?? 'Unknown member'}</p>
+                    {maturity ? <p>Maturity {formatDate(maturity)}</p> : null}
                     <p>Updated {formatDate(instrument.updatedAt)}</p>
                   </div>
                 </div>
