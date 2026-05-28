@@ -16,8 +16,11 @@ const PROVIDERS = {
 const SYSTEM_PROMPT = `You are Paisa Book's portfolio assistant for an Indian family finance ledger.
 Answer only from the provided portfolio snapshot and the user's assumptions.
 You can help with portfolio lookup, projections, affordability checks, obligation awareness, and financial health suggestions.
-Show calculations in compact steps when the user asks "what if" or affordability questions.
-Format answers as concise Markdown with short headings, bullet points, and bold emphasis only where helpful.
+Keep every answer concise and complete. Target 300-600 words, maximum 5 short sections.
+For "what if" or affordability questions, use this exact structure: Verdict, Key numbers, Risks, Suggested next steps.
+For obligation questions, use this exact structure: Needs attention, Why it matters, Next steps.
+Use simple Markdown only: short headings, "- " bullets, and bold emphasis. Do not use tables, nested bullets, horizontal rules, or decorative separators.
+Never end mid-sentence. If there is too much detail, summarize instead of continuing.
 Call out missing assumptions and use conservative defaults only when you clearly label them.
 Do not present yourself as a SEBI registered investment adviser, tax adviser, lawyer, or insurance agent.
 Do not recommend specific securities or funds. Keep suggestions educational, practical, and risk-aware.
@@ -52,7 +55,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const answer = await callProvider({
+    const result = await callProvider({
       provider,
       model: process.env.AI_MODEL || PROVIDERS[provider].defaultModel,
       apiKey: process.env[PROVIDERS[provider].key],
@@ -64,7 +67,9 @@ export default async function handler(req, res) {
     res.status(200).json({
       provider,
       model: process.env.AI_MODEL || PROVIDERS[provider].defaultModel,
-      answer
+      answer: result.answer,
+      finishReason: result.finishReason,
+      truncated: result.truncated
     });
   } catch (error) {
     res.status(500).json({
@@ -119,15 +124,32 @@ async function callProvider({ provider, model, apiKey, maxOutputTokens, question
   }
 
   const portfolioContext = JSON.stringify(snapshot);
-  const userPrompt = `Portfolio snapshot JSON:\n${portfolioContext}\n\nUser question:\n${question}`;
+  const userPrompt = `Portfolio snapshot JSON:\n${portfolioContext}\n\nUser question:\n${question}\n\nReturn a complete concise answer. Prefer summarizing over long enumeration.`;
+
+  let result;
+  if (provider === 'anthropic') {
+    result = await callAnthropic({ apiKey, model, maxOutputTokens, userPrompt });
+  } else if (provider === 'gemini') {
+    result = await callGemini({ apiKey, model, maxOutputTokens, userPrompt });
+  } else {
+    result = await callOpenAI({ apiKey, model, maxOutputTokens, userPrompt });
+  }
+
+  if (!result.truncated) return result;
+
+  const concisePrompt = `The previous answer was cut off. Regenerate from scratch as a COMPLETE concise answer in 250-450 words.
+Use only these sections: Verdict, Key numbers, Risks, Next steps.
+Do not list every instrument; group similar items. Do not use tables or horizontal rules.
+
+${userPrompt}`;
 
   if (provider === 'anthropic') {
-    return callAnthropic({ apiKey, model, maxOutputTokens, userPrompt });
+    return callAnthropic({ apiKey, model, maxOutputTokens, userPrompt: concisePrompt });
   }
   if (provider === 'gemini') {
-    return callGemini({ apiKey, model, maxOutputTokens, userPrompt });
+    return callGemini({ apiKey, model, maxOutputTokens, userPrompt: concisePrompt });
   }
-  return callOpenAI({ apiKey, model, maxOutputTokens, userPrompt });
+  return callOpenAI({ apiKey, model, maxOutputTokens, userPrompt: concisePrompt });
 }
 
 async function callOpenAI({ apiKey, model, maxOutputTokens, userPrompt }) {
@@ -148,7 +170,13 @@ async function callOpenAI({ apiKey, model, maxOutputTokens, userPrompt }) {
     })
   });
   const json = await parseProviderResponse(response);
-  return json.choices?.[0]?.message?.content?.trim() || 'No answer returned.';
+  const choice = json.choices?.[0];
+  const finishReason = choice?.finish_reason;
+  return {
+    answer: choice?.message?.content?.trim() || 'No answer returned.',
+    finishReason,
+    truncated: finishReason === 'length'
+  };
 }
 
 async function callAnthropic({ apiKey, model, maxOutputTokens, userPrompt }) {
@@ -168,7 +196,12 @@ async function callAnthropic({ apiKey, model, maxOutputTokens, userPrompt }) {
     })
   });
   const json = await parseProviderResponse(response);
-  return json.content?.map((part) => part.text).filter(Boolean).join('\n').trim() || 'No answer returned.';
+  const finishReason = json.stop_reason;
+  return {
+    answer: json.content?.map((part) => part.text).filter(Boolean).join('\n').trim() || 'No answer returned.',
+    finishReason,
+    truncated: finishReason === 'max_tokens'
+  };
 }
 
 async function callGemini({ apiKey, model, maxOutputTokens, userPrompt }) {
@@ -194,7 +227,13 @@ async function callGemini({ apiKey, model, maxOutputTokens, userPrompt }) {
     }
   );
   const json = await parseProviderResponse(response);
-  return json.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join('\n').trim() || 'No answer returned.';
+  const candidate = json.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  return {
+    answer: candidate?.content?.parts?.map((part) => part.text).filter(Boolean).join('\n').trim() || 'No answer returned.',
+    finishReason,
+    truncated: finishReason === 'MAX_TOKENS'
+  };
 }
 
 async function parseProviderResponse(response) {

@@ -15,6 +15,7 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   meta?: string;
+  truncated?: boolean;
 };
 
 const starterPrompts = [
@@ -73,7 +74,8 @@ export function AssistantPage() {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: data.answer,
-          meta: `${data.provider} · ${data.model}`
+          meta: `${data.provider} · ${data.model}`,
+          truncated: Boolean(data.truncated)
         }
       ]);
     } catch (caught) {
@@ -210,6 +212,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       ) : null}
       <div className={`max-w-3xl rounded-lg px-4 py-3 ${isUser ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-900'}`}>
         <MarkdownText content={message.content} inverted={isUser} />
+        {message.truncated ? (
+          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            The provider stopped at its output limit. Ask a narrower follow-up for more detail.
+          </p>
+        ) : null}
         {message.meta ? <p className={`mt-2 text-xs ${isUser ? 'text-teal-50' : 'text-slate-500'}`}>{message.meta}</p> : null}
       </div>
       {isUser ? (
@@ -222,15 +229,16 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 function MarkdownText({ content, inverted = false }: { content: string; inverted?: boolean }) {
-  const blocks = content.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
   const textClass = inverted ? 'text-white' : 'text-slate-900';
   const mutedClass = inverted ? 'text-teal-50' : 'text-slate-700';
+  const lines = normalizeMarkdown(content).split('\n');
 
   return (
     <div className={`space-y-3 text-sm leading-6 ${textClass}`}>
-      {blocks.map((block, index) => {
-        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-        const heading = block.match(/^#{1,3}\s+(.+)/);
+      {groupLines(lines).map((block, index) => {
+        const blockLines = block.lines;
+        const firstLine = blockLines[0] ?? '';
+        const heading = firstLine.match(/^#{1,3}\s+(.+)/);
         if (heading) {
           return (
             <h3 key={index} className="text-base font-bold">
@@ -238,27 +246,30 @@ function MarkdownText({ content, inverted = false }: { content: string; inverted
             </h3>
           );
         }
-        if (lines.every((line) => /^[-*]\s+/.test(line))) {
+        if (block.kind === 'separator') {
+          return null;
+        }
+        if (block.kind === 'unordered') {
           return (
             <ul key={index} className={`list-disc space-y-1 pl-5 ${mutedClass}`}>
-              {lines.map((line) => (
-                <li key={line}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>
+              {blockLines.map((line, lineIndex) => (
+                <li key={`${line}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>
               ))}
             </ul>
           );
         }
-        if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+        if (block.kind === 'ordered') {
           return (
             <ol key={index} className={`list-decimal space-y-1 pl-5 ${mutedClass}`}>
-              {lines.map((line) => (
-                <li key={line}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>
+              {blockLines.map((line, lineIndex) => (
+                <li key={`${line}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>
               ))}
             </ol>
           );
         }
         return (
           <p key={index} className={`whitespace-pre-wrap ${mutedClass}`}>
-            {renderInlineMarkdown(block)}
+            {renderInlineMarkdown(blockLines.join('\n'))}
           </p>
         );
       })}
@@ -266,11 +277,47 @@ function MarkdownText({ content, inverted = false }: { content: string; inverted
   );
 }
 
+function normalizeMarkdown(content: string) {
+  return content
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s{0,3}\*\s+\*/gm, '- ')
+    .replace(/^\s{0,3}\*\s+/gm, '- ')
+    .replace(/^\s{0,3}[-*]{3,}\s*$/gm, '---')
+    .trim();
+}
+
+function groupLines(lines: string[]) {
+  const groups: { kind: 'heading' | 'ordered' | 'paragraph' | 'separator' | 'unordered'; lines: string[] }[] = [];
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) return;
+    const kind = line.startsWith('#')
+      ? 'heading'
+      : line === '---'
+        ? 'separator'
+        : /^[-*]\s+/.test(line)
+          ? 'unordered'
+          : /^\d+\.\s+/.test(line)
+            ? 'ordered'
+            : 'paragraph';
+    const previous = groups[groups.length - 1];
+    if (previous && previous.kind === kind && kind !== 'heading' && kind !== 'separator') {
+      previous.lines.push(line);
+    } else {
+      groups.push({ kind, lines: [line] });
+    }
+  });
+  return groups;
+}
+
 function renderInlineMarkdown(value: string) {
-  const parts = value.split(/(\*\*[^*]+\*\*)/g);
+  const parts = value.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={`${part}-${index}`} className="font-bold">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <strong key={`${part}-${index}`} className="font-semibold">{part.slice(1, -1)}</strong>;
     }
     return part;
   });
