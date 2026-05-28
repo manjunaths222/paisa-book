@@ -38,8 +38,16 @@ export function Button({
   );
 }
 
-export function Card({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
-  return <section className={`rounded-lg border border-slate-200 bg-white shadow-soft ${className}`}>{children}</section>;
+export function Card({
+  children,
+  className = '',
+  ...props
+}: PropsWithChildren<React.HTMLAttributes<HTMLElement> & { className?: string }>) {
+  return (
+    <section {...props} className={`rounded-lg border border-slate-200 bg-white shadow-soft ${className}`}>
+      {children}
+    </section>
+  );
 }
 
 export function Badge({ children, tone = 'slate' }: PropsWithChildren<{ tone?: 'slate' | 'teal' | 'indigo' | 'rose' | 'amber' }>) {
