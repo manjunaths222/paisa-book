@@ -19,6 +19,7 @@ Portfolio Assistant model settings:
 
 - `AI_PROVIDER=openai`, `anthropic`, or `gemini`
 - `AI_MODEL` such as `gpt-4o-mini`, `claude-3-5-haiku-latest`, or `gemini-1.5-flash`
+- `AI_MAX_OUTPUT_TOKENS`, optional, defaults to `3000`
 - `OPENAI_API_KEY` when `AI_PROVIDER=openai`
 - `ANTHROPIC_API_KEY` when `AI_PROVIDER=anthropic`
 - `GEMINI_API_KEY` when `AI_PROVIDER=gemini`

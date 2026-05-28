@@ -59,6 +59,7 @@ The serverless function does not read or write Firestore. This keeps the impleme
 
 - `AI_PROVIDER=openai`, `anthropic`, or `gemini`
 - `AI_MODEL=<provider model name>`
+- `AI_MAX_OUTPUT_TOKENS=<500-8000>` defaults to `3000`
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`
 
 LangGraph is not required for the current single-step assistant. If the product later needs multi-step workflows such as goal planning, tool calling, saved action plans, approval gates, or scheduled monitoring, the `/api/portfolio-agent` endpoint is the right place to introduce a LangGraph graph without changing the React page.

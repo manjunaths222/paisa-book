@@ -209,7 +209,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         </div>
       ) : null}
       <div className={`max-w-3xl rounded-lg px-4 py-3 ${isUser ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-900'}`}>
-        <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+        <MarkdownText content={message.content} inverted={isUser} />
         {message.meta ? <p className={`mt-2 text-xs ${isUser ? 'text-teal-50' : 'text-slate-500'}`}>{message.meta}</p> : null}
       </div>
       {isUser ? (
@@ -219,4 +219,59 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       ) : null}
     </div>
   );
+}
+
+function MarkdownText({ content, inverted = false }: { content: string; inverted?: boolean }) {
+  const blocks = content.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+  const textClass = inverted ? 'text-white' : 'text-slate-900';
+  const mutedClass = inverted ? 'text-teal-50' : 'text-slate-700';
+
+  return (
+    <div className={`space-y-3 text-sm leading-6 ${textClass}`}>
+      {blocks.map((block, index) => {
+        const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+        const heading = block.match(/^#{1,3}\s+(.+)/);
+        if (heading) {
+          return (
+            <h3 key={index} className="text-base font-bold">
+              {renderInlineMarkdown(heading[1])}
+            </h3>
+          );
+        }
+        if (lines.every((line) => /^[-*]\s+/.test(line))) {
+          return (
+            <ul key={index} className={`list-disc space-y-1 pl-5 ${mutedClass}`}>
+              {lines.map((line) => (
+                <li key={line}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+          return (
+            <ol key={index} className={`list-decimal space-y-1 pl-5 ${mutedClass}`}>
+              {lines.map((line) => (
+                <li key={line}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={index} className={`whitespace-pre-wrap ${mutedClass}`}>
+            {renderInlineMarkdown(block)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderInlineMarkdown(value: string) {
+  const parts = value.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={`${part}-${index}`} className="font-bold">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }

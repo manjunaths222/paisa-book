@@ -17,10 +17,12 @@ const SYSTEM_PROMPT = `You are Paisa Book's portfolio assistant for an Indian fa
 Answer only from the provided portfolio snapshot and the user's assumptions.
 You can help with portfolio lookup, projections, affordability checks, obligation awareness, and financial health suggestions.
 Show calculations in compact steps when the user asks "what if" or affordability questions.
+Format answers as concise Markdown with short headings, bullet points, and bold emphasis only where helpful.
 Call out missing assumptions and use conservative defaults only when you clearly label them.
 Do not present yourself as a SEBI registered investment adviser, tax adviser, lawyer, or insurance agent.
 Do not recommend specific securities or funds. Keep suggestions educational, practical, and risk-aware.
 Use Indian numbering and rupee formatting when the snapshot currency is INR.`;
+const DEFAULT_MAX_OUTPUT_TOKENS = 3000;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -54,6 +56,7 @@ export default async function handler(req, res) {
       provider,
       model: process.env.AI_MODEL || PROVIDERS[provider].defaultModel,
       apiKey: process.env[PROVIDERS[provider].key],
+      maxOutputTokens: outputTokenLimit(),
       question,
       snapshot
     });
@@ -68,6 +71,12 @@ export default async function handler(req, res) {
       error: error instanceof Error ? error.message : 'Portfolio assistant failed'
     });
   }
+}
+
+function outputTokenLimit() {
+  const parsed = Number(process.env.AI_MAX_OUTPUT_TOKENS ?? DEFAULT_MAX_OUTPUT_TOKENS);
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_OUTPUT_TOKENS;
+  return Math.min(Math.max(Math.trunc(parsed), 500), 8000);
 }
 
 function scrubForModel(value) {
@@ -104,7 +113,7 @@ function scrubForModel(value) {
   );
 }
 
-async function callProvider({ provider, model, apiKey, question, snapshot }) {
+async function callProvider({ provider, model, apiKey, maxOutputTokens, question, snapshot }) {
   if (!apiKey) {
     throw new Error(`Missing ${PROVIDERS[provider].key}`);
   }
@@ -113,15 +122,15 @@ async function callProvider({ provider, model, apiKey, question, snapshot }) {
   const userPrompt = `Portfolio snapshot JSON:\n${portfolioContext}\n\nUser question:\n${question}`;
 
   if (provider === 'anthropic') {
-    return callAnthropic({ apiKey, model, userPrompt });
+    return callAnthropic({ apiKey, model, maxOutputTokens, userPrompt });
   }
   if (provider === 'gemini') {
-    return callGemini({ apiKey, model, userPrompt });
+    return callGemini({ apiKey, model, maxOutputTokens, userPrompt });
   }
-  return callOpenAI({ apiKey, model, userPrompt });
+  return callOpenAI({ apiKey, model, maxOutputTokens, userPrompt });
 }
 
-async function callOpenAI({ apiKey, model, userPrompt }) {
+async function callOpenAI({ apiKey, model, maxOutputTokens, userPrompt }) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -131,6 +140,7 @@ async function callOpenAI({ apiKey, model, userPrompt }) {
     body: JSON.stringify({
       model,
       temperature: 0.2,
+      max_tokens: maxOutputTokens,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt }
@@ -141,7 +151,7 @@ async function callOpenAI({ apiKey, model, userPrompt }) {
   return json.choices?.[0]?.message?.content?.trim() || 'No answer returned.';
 }
 
-async function callAnthropic({ apiKey, model, userPrompt }) {
+async function callAnthropic({ apiKey, model, maxOutputTokens, userPrompt }) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -151,7 +161,7 @@ async function callAnthropic({ apiKey, model, userPrompt }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1200,
+      max_tokens: maxOutputTokens,
       temperature: 0.2,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }]
@@ -161,7 +171,7 @@ async function callAnthropic({ apiKey, model, userPrompt }) {
   return json.content?.map((part) => part.text).filter(Boolean).join('\n').trim() || 'No answer returned.';
 }
 
-async function callGemini({ apiKey, model, userPrompt }) {
+async function callGemini({ apiKey, model, maxOutputTokens, userPrompt }) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
     {
@@ -172,7 +182,7 @@ async function callGemini({ apiKey, model, userPrompt }) {
       body: JSON.stringify({
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 1200
+          maxOutputTokens
         },
         contents: [
           {
