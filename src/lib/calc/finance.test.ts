@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { addMonths, format } from 'date-fns';
-import { calcEMI, calcFDMaturity, calcRDMaturity, maturityDateForInstrument, projectPortfolio } from './finance';
+import {
+  calcEMI,
+  calcFDMaturity,
+  calcRDMaturity,
+  estimatedMaturityValue,
+  maturityDateForInstrument,
+  projectPortfolio
+} from './finance';
 import { Instrument } from '../../types/finance';
 
 describe('finance calculations', () => {
@@ -14,6 +21,69 @@ describe('finance calculations', () => {
 
   it('calculates RD maturity above total instalments when rate is positive', () => {
     expect(calcRDMaturity(10000, 7, 12)).toBeGreaterThan(120000);
+  });
+
+  it('estimates FD maturity over the full deposit term', () => {
+    const maturity = estimatedMaturityValue({
+      id: 'fd-full-term',
+      uid: 'u1',
+      memberId: 'm1',
+      type: 'fd',
+      referenceId: 'FD-FULL',
+      status: 'active',
+      bankName: 'Bank',
+      startDate: '2021-08-16',
+      termEndDate: '2026-08-16',
+      interestRate: 5.5,
+      principalAmount: 150000,
+      payoutFrequency: 'At Maturity',
+      createdAt: '2021-08-16',
+      updatedAt: '2021-08-16'
+    });
+
+    expect(maturity).toBeCloseTo(calcFDMaturity(150000, 5.5, 60, 'At Maturity'), 0);
+  });
+
+  it('estimates RD maturity over the configured RD term', () => {
+    const maturity = estimatedMaturityValue({
+      id: 'rd-full-term',
+      uid: 'u1',
+      memberId: 'm1',
+      type: 'rd',
+      referenceId: 'RD-FULL',
+      status: 'active',
+      bankName: 'Bank',
+      startDate: '2024-01-01',
+      numberOfMonths: 24,
+      emiDate: 5,
+      interestRate: 7,
+      monthlyInstalment: 5000,
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01'
+    });
+
+    expect(maturity).toBeCloseTo(calcRDMaturity(5000, 7, 24), 2);
+  });
+
+  it('estimates a 12 month RD maturity above total instalments', () => {
+    const maturity = estimatedMaturityValue({
+      id: 'rd-12-months',
+      uid: 'u1',
+      memberId: 'm1',
+      type: 'rd',
+      referenceId: 'RD-12',
+      status: 'active',
+      bankName: 'Bank',
+      startDate: '2025-09-04',
+      numberOfMonths: 12,
+      emiDate: 4,
+      interestRate: 6.5,
+      monthlyInstalment: 20000,
+      createdAt: '2025-09-04',
+      updatedAt: '2025-09-04'
+    });
+
+    expect(maturity).toBeCloseTo(248620.12, 2);
   });
 
   it('deducts loan outstanding from projected net worth', () => {

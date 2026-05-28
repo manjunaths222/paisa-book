@@ -50,6 +50,11 @@ const safeParseDate = (value?: string) => {
 };
 
 const monthsBetween = (start: Date, end: Date) => Math.max(0, differenceInCalendarDays(end, start) / 30.4375);
+const calendarMonthsBetween = (start: Date, end: Date) => {
+  const fullMonths = Math.max(0, differenceInMonths(end, start));
+  const monthAnchor = addMonths(start, fullMonths);
+  return fullMonths + Math.max(0, differenceInCalendarDays(end, monthAnchor) / 30.4375);
+};
 const finiteNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -72,9 +77,15 @@ const projectFDValue = (
   monthsAhead: number,
   autoRenewDeposits = true
 ) => {
+  const start = safeParseDate(instrument.startDate);
+  if (!start) return instrument.principalAmount;
   const maturity = fdMaturityDate(instrument);
-  const monthsUntilMaturity = maturity ? monthsBetween(new Date(), maturity) : monthsAhead;
-  const monthsToProject = autoRenewDeposits ? monthsAhead : Math.min(monthsAhead, monthsUntilMaturity);
+  const target = addMonths(new Date(), monthsAhead);
+  const targetMonthsFromStart = calendarMonthsBetween(start, target);
+  const termMonths = maturity ? calendarMonthsBetween(start, maturity) : undefined;
+  const monthsToProject = autoRenewDeposits
+    ? targetMonthsFromStart
+    : Math.min(targetMonthsFromStart, termMonths ?? targetMonthsFromStart);
   return compound(instrument.principalAmount, instrument.interestRate, monthsToProject, 4);
 };
 
@@ -126,6 +137,41 @@ export const currentInstrumentValue = (instrument: Instrument) => {
       return instrument.currentBalance;
     case 'otherSavings':
       return instrument.currentAmount;
+  }
+};
+
+export const estimatedMaturityValue = (instrument: Instrument) => {
+  switch (instrument.type) {
+    case 'fd': {
+      const start = safeParseDate(instrument.startDate);
+      const maturity = fdMaturityDate(instrument);
+      if (!start || !maturity) return undefined;
+      return calcFDMaturity(
+        instrument.principalAmount,
+        instrument.interestRate,
+        calendarMonthsBetween(start, maturity),
+        instrument.payoutFrequency
+      );
+    }
+    case 'rd':
+      return calcRDMaturity(instrument.monthlyInstalment, instrument.interestRate, instrument.numberOfMonths);
+    case 'ppf':
+    case 'ssa': {
+      const maturity = maturityDateForInstrument(instrument);
+      const openDate = safeParseDate(instrument.accountOpenDate);
+      const maturityDate = safeParseDate(maturity);
+      if (!openDate || !maturityDate) return undefined;
+      return (
+        compound(instrument.currentBalance, instrument.estimatedRoi, monthsBetween(new Date(), maturityDate), 1) +
+        calcRDMaturity(
+          instrument.financialYearContribution / 12,
+          instrument.estimatedRoi,
+          Math.max(0, Math.round(monthsBetween(new Date(), maturityDate)))
+        )
+      );
+    }
+    default:
+      return undefined;
   }
 };
 

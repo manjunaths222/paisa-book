@@ -20,7 +20,12 @@ import { Instrument, InstrumentType } from '../../types/finance';
 import { firestoreService } from '../../lib/firestore/service';
 import { useUiStore } from '../../shared/stores/uiStore';
 import { formatCurrency, formatDate } from '../../lib/format';
-import { currentInstrumentValue, maturityDateForInstrument, projectInstrument } from '../../lib/calc/finance';
+import {
+  currentInstrumentValue,
+  estimatedMaturityValue,
+  maturityDateForInstrument,
+  projectInstrument
+} from '../../lib/calc/finance';
 import { instrumentName, primaryAmount } from './instrumentFormConfig';
 
 const projectionMonths = [3, 6, 9, 12, 24, 36, 60];
@@ -202,11 +207,7 @@ function InstrumentProjectionDetail({
   autoRenewDeposits: boolean;
 }) {
   const maturity = maturityDateForInstrument(instrument);
-  const maturityEstimate = maturity
-    ? projectInstrument(instrument, Math.max(0, (new Date(maturity).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30.4375)), {
-        autoRenewDeposits: false
-      })
-    : undefined;
+  const maturityEstimate = estimatedMaturityValue(instrument);
 
   return (
     <div className="space-y-5">
@@ -218,6 +219,12 @@ function InstrumentProjectionDetail({
         {maturityEstimate !== undefined ? <Info label="Estimated maturity value" value={formatCurrency(maturityEstimate, currency)} /> : null}
         {instrumentOpenDate(instrument) ? <Info label={openDateLabel(instrument)} value={formatDate(instrumentOpenDate(instrument))} /> : null}
       </div>
+      {instrument.description ? (
+        <div className="rounded-md bg-slate-50 px-3 py-2">
+          <p className="text-xs font-semibold uppercase text-slate-400">Description</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6 text-slate-800">{instrument.description}</p>
+        </div>
+      ) : null}
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50">
