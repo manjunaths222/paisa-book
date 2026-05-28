@@ -15,6 +15,16 @@ Optional local emulator flag:
 
 - `VITE_USE_FIREBASE_EMULATORS=true`
 
+Portfolio Assistant model settings:
+
+- `AI_PROVIDER=openai`, `anthropic`, or `gemini`
+- `AI_MODEL` such as `gpt-4o-mini`, `claude-3-5-haiku-latest`, or `gemini-1.5-flash`
+- `OPENAI_API_KEY` when `AI_PROVIDER=openai`
+- `ANTHROPIC_API_KEY` when `AI_PROVIDER=anthropic`
+- `GEMINI_API_KEY` when `AI_PROVIDER=gemini`
+
+Keep model API keys in Vercel environment variables. Do not expose them with a `VITE_` prefix.
+
 ## Firebase Setup
 
 1. Create separate dev and production Firebase projects.
@@ -50,7 +60,17 @@ New Firebase projects created in production mode often start with restrictive ru
 
 ## Vercel
 
-The app is a static SPA. `vercel.json` rewrites all routes to `index.html` and sets security headers including CSP, frame protection, content-type protection, referrer policy, and permissions policy.
+The app is a static SPA with one Vercel serverless function for the Portfolio Assistant. `vercel.json` rewrites browser routes to `index.html` while keeping `/api/*` available for serverless functions. Security headers include CSP, frame protection, content-type protection, referrer policy, and permissions policy.
+
+The assistant deploys with the same Vercel project as the app at:
+
+```text
+/api/portfolio-agent
+```
+
+To switch model providers, update `AI_PROVIDER`, `AI_MODEL`, and the matching provider API key in Vercel, then redeploy.
+
+The assistant sends only redacted portfolio context to the LLM provider. It removes member names, internal IDs, reference/account IDs, descriptions, PAN, DOB, email, Firebase UID, and institution/security names before model access. The user's typed question is also redacted for known names and references from the portfolio, but users should still avoid typing PAN, account numbers, or other secrets into the chat.
 
 ## CI
 

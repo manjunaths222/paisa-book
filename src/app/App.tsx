@@ -9,6 +9,7 @@ import { InstrumentFormPage } from '../features/instruments/InstrumentFormPage';
 import { MembersPage } from '../features/members/MembersPage';
 import { ProjectionsPage } from '../features/projections/ProjectionsPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
+import { AssistantPage } from '../features/assistant/AssistantPage';
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
           <Route path="/instruments/add" element={<InstrumentFormPage />} />
           <Route path="/instruments/:id/edit" element={<InstrumentFormPage />} />
           <Route path="/projections" element={<ProjectionsPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

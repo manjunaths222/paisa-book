@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageSquareText,
   Settings,
   Users
 } from 'lucide-react';
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/instruments', label: 'Instruments', icon: BookOpenCheck },
   { to: '/projections', label: 'Projections', icon: BarChart3 },
+  { to: '/assistant', label: 'Assistant', icon: MessageSquareText },
   { to: '/members', label: 'Members', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings }
 ];
@@ -86,7 +88,7 @@ export function AppLayout() {
           </AnimatePresence>
         </div>
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-slate-200 bg-white lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-slate-200 bg-white lg:hidden">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (

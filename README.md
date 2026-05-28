@@ -11,6 +11,7 @@ Paisa Book is a React/Vite family finance ledger for tracking deposits, investme
 - Zod validation for required fields, ranges, uniqueness, and SSA beneficiary eligibility.
 - Dashboard with net worth, summary cards, type/member charts, upcoming obligations, and recent activity.
 - Projection page with +3M, +6M, +12M, +24M, +36M, and +60M horizons.
+- Portfolio Assistant for grounded portfolio Q&A and what-if affordability analysis using OpenAI, Anthropic, or Gemini.
 - Firestore security rules, indexes, Vercel SPA routing, security headers, and GitHub Actions CI.
 - Local demo mode when Firebase environment variables are not configured.
 
